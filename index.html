@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>店家開發雷達</title>
+<style>
+:root{
+  --bg:#0b1220; --panel:#121c2e; --panel2:#17243a; --text:#f5f7fb;
+  --muted:#9fb0c8; --line:#263750; --accent:#58a6ff; --good:#3ddc97;
+  --warn:#f6c453; --bad:#ff6b6b;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;background:linear-gradient(180deg,#08111f,#0d1728);color:var(--text)}
+.wrap{max-width:1200px;margin:auto;padding:28px 18px 48px}
+h1{margin:0 0 6px;font-size:32px}
+.sub{color:var(--muted);margin-bottom:24px}
+.card{background:rgba(18,28,46,.96);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:16px;box-shadow:0 14px 40px rgba(0,0,0,.18)}
+.grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px}
+@media(max-width:850px){.grid{grid-template-columns:1fr}}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:7px}
+input,select,button{width:100%;border-radius:12px;border:1px solid var(--line);background:#0c1627;color:var(--text);padding:12px 13px;font-size:15px}
+button{cursor:pointer;background:var(--accent);border:none;color:#04101f;font-weight:800}
+button.secondary{background:#223450;color:var(--text)}
+.toolbar{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:850px){.toolbar{grid-template-columns:1fr}}
+.status{margin:12px 0 0;color:var(--muted);font-size:13px}
+table{width:100%;border-collapse:collapse;margin-top:8px}
+th,td{text-align:left;padding:13px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:#b9c8da;font-size:12px}
+td{font-size:14px}
+.badge{display:inline-block;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:800}
+.high{background:rgba(61,220,151,.16);color:#69efb1}
+.mid{background:rgba(246,196,83,.15);color:#ffd87d}
+.low{background:rgba(255,107,107,.14);color:#ff9d9d}
+a{color:#7db7ff;text-decoration:none}
+.empty{padding:34px;text-align:center;color:var(--muted)}
+.small{font-size:12px;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:850px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:#111d30;border:1px solid var(--line);border-radius:14px;padding:14px}
+.kpi .n{font-size:26px;font-weight:900}
+.kpi .t{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>店家開發雷達</h1>
+  <div class="sub">找出「評價高、評論多、但沒有官網」的高潛力店家。</div>
+
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label>搜尋關鍵字</label>
+        <input id="query" value="高雄 左營 滷肉飯" placeholder="例如：高雄 鼓山 咖啡廳">
+      </div>
+      <div>
+        <label>最低評分</label>
+        <input id="minRating" type="number" min="0" max="5" step="0.1" value="4.5">
+      </div>
+      <div>
+        <label>最低評論數</label>
+        <input id="minReviews" type="number" min="0" value="300">
+      </div>
+      <div>
+        <label>官網條件</label>
+        <select id="websiteFilter">
+          <option value="none" selected>只看無官網</option>
+          <option value="all">全部</option>
+          <option value="has">只看有官網</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div>
+        <label>Google Places API Key</label>
+        <input id="apiKey" type="password" placeholder="貼上 API Key 後即可正式搜尋">
+      </div>
+      <div style="align-self:end">
+        <button id="searchBtn">開始搜尋</button>
+      </div>
+      <div style="align-self:end">
+        <button class="secondary" id="demoBtn">載入示範資料</button>
+      </div>
+    </div>
+    <div class="status" id="status">目前是原型版。未填 API Key 時可先用「示範資料」測試操作。</div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="n" id="kTotal">0</div><div class="t">搜尋結果</div></div>
+    <div class="kpi"><div class="n" id="kNoWeb">0</div><div class="t">無官網</div></div>
+    <div class="kpi"><div class="n" id="kHigh">0</div><div class="t">高潛力</div></div>
+    <div class="kpi"><div class="n" id="kAvg">0</div><div class="t">平均評分</div></div>
+  </div>
+
+  <div class="card">
+    <div style="overflow:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>店家</th><th>評分</th><th>評論數</th><th>官網</th><th>開發建議</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="6" class="empty">尚未搜尋資料</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="small" style="margin-top:12px">建議規則：評分 ≥ 設定值、評論數 ≥ 設定值、且沒有官網 → 高潛力客戶。</div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let rows = [];
+
+function classify(p){
+  const minR = Number($("minRating").value || 0);
+  const minC = Number($("minReviews").value || 0);
+  if(!p.website && p.rating >= minR && p.reviews >= minC) return ["🔥 高潛力","high"];
+  if(!p.website) return ["可開發","mid"];
+  return ["已有官網","low"];
+}
+
+function applyFilters(data){
+  const minR = Number($("minRating").value || 0);
+  const minC = Number($("minReviews").value || 0);
+  const wf = $("websiteFilter").value;
+  return data.filter(p=>{
+    const webOK = wf==="all" || (wf==="none" && !p.website) || (wf==="has" && !!p.website);
+    return webOK && p.rating >= minR && p.reviews >= minC;
+  });
+}
+
+function render(){
+  const data = applyFilters(rows);
+  const tb = $("tbody");
+  tb.innerHTML = "";
+  if(!data.length){
+    tb.innerHTML = '<tr><td colspan="6" class="empty">沒有符合目前條件的店家</td></tr>';
+  } else {
+    data.forEach(p=>{
+      const [label, cls] = classify(p);
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(p.name)}</strong><div class="small">${escapeHtml(p.address||"")}</div></td>
+        <td>⭐ ${p.rating ?? "-"}</td>
+        <td>${(p.reviews ?? 0).toLocaleString()}</td>
+        <td>${p.website ? `<a href="${p.website}" target="_blank">查看官網</a>` : "❌ 無"}</td>
+        <td><span class="badge ${cls}">${label}</span></td>
+        <td>${p.maps ? `<a href="${p.maps}" target="_blank">Google Maps</a>` : "-"}</td>`;
+      tb.appendChild(tr);
+    });
+  }
+  $("kTotal").textContent = data.length;
+  $("kNoWeb").textContent = data.filter(x=>!x.website).length;
+  $("kHigh").textContent = data.filter(x=>classify(x)[1]==="high").length;
+  $("kAvg").textContent = data.length ? (data.reduce((a,b)=>a+(b.rating||0),0)/data.length).toFixed(1) : "0";
+}
+
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));}
+
+$("demoBtn").onclick = ()=>{
+  rows = [
+    {name:"老街滷肉飯",rating:4.8,reviews:1280,website:"",address:"高雄市左營區示範路 1 號",maps:"https://maps.google.com/?q=高雄+滷肉飯"},
+    {name:"港都咖啡",rating:4.7,reviews:682,website:"https://example.com",address:"高雄市鼓山區示範路 2 號",maps:"https://maps.google.com/?q=高雄+咖啡"},
+    {name:"阿嬤古早味",rating:4.6,reviews:2350,website:"",address:"高雄市三民區示範路 3 號",maps:"https://maps.google.com/?q=高雄+小吃"},
+    {name:"海邊早餐",rating:4.5,reviews:410,website:"",address:"高雄市前鎮區示範路 4 號",maps:"https://maps.google.com/?q=高雄+早餐"}
+  ];
+  $("status").textContent = "已載入示範資料。你可以調整評分、評論數與官網條件測試篩選。";
+  render();
+};
+
+["minRating","minReviews","websiteFilter"].forEach(id => $(id).addEventListener("input", render));
+
+$("searchBtn").onclick = async ()=>{
+  const key = $("apiKey").value.trim();
+  const q = $("query").value.trim();
+  if(!key){
+    $("status").textContent = "請先輸入 Google Places API Key；如果只是要試介面，可以先按「載入示範資料」。";
+    return;
+  }
+  if(!q){$("status").textContent="請輸入搜尋關鍵字。"; return;}
+
+  $("status").textContent = "正在搜尋...";
+  try{
+    const r = await fetch("https://places.googleapis.com/v1/places:searchText",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "X-Goog-Api-Key":key,
+        "X-Goog-FieldMask":"places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.websiteUri,places.googleMapsUri"
+      },
+      body:JSON.stringify({textQuery:q, pageSize:20, languageCode:"zh-TW"})
+    });
+    if(!r.ok) throw new Error("API 回應錯誤："+r.status);
+    const j = await r.json();
+    rows = (j.places||[]).map(p=>({
+      name:p.displayName?.text || "未命名",
+      rating:Number(p.rating||0),
+      reviews:Number(p.userRatingCount||0),
+      website:p.websiteUri||"",
+      address:p.formattedAddress||"",
+      maps:p.googleMapsUri||""
+    }));
+    $("status").textContent = `已取得 ${rows.length} 筆資料。`;
+    render();
+  }catch(e){
+    $("status").textContent = "搜尋失敗：" + e.message + "。若瀏覽器阻擋跨網域請求，下一版可改成後端 Proxy 版本。";
+  }
+};
+</script>
+</body>
+</html>
